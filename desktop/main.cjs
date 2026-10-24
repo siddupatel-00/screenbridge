@@ -1,51 +1,37 @@
 const { app, BrowserWindow, Menu, Tray, nativeImage, shell, desktopCapturer, session } = require('electron');
 const path = require('path');
-const { fork } = require('child_process');
+const { pathToFileURL } = require('url');
 const http = require('http');
 
 let mainWindow = null;
 let tray = null;
-let serverChild = null;
-let agentChild = null;
 let isQuitting = false;
 
 const SERVER_PORT = process.env.PORT || 8787;
 const AGENT_PORT = 8790;
 
-function startServices() {
+async function startServices() {
   const serverPath = path.join(__dirname, '..', 'server', 'index.js');
   const agentPath = path.join(__dirname, '..', 'agent', 'agent.js');
 
-  console.log('[Electron] Starting ScreenBridge Server...');
-  serverChild = fork(serverPath, ['--port=' + SERVER_PORT], {
-    stdio: 'inherit',
-    env: { ...process.env, PORT: String(SERVER_PORT) }
-  });
-
-  console.log('[Electron] Starting ScreenBridge Agent...');
-  agentChild = fork(agentPath, [], {
-    stdio: 'inherit',
-    env: { ...process.env, PORT: String(AGENT_PORT) }
-  });
-
-  serverChild.on('error', (err) => console.error('[Server Child Error]', err));
-  agentChild.on('error', (err) => console.error('[Agent Child Error]', err));
-}
-
-function stopServices() {
-  if (serverChild) {
-    try { serverChild.kill(); } catch {}
-    serverChild = null;
+  try {
+    console.log('[Electron] Starting embedded Server...');
+    await import(pathToFileURL(serverPath).href);
+  } catch (err) {
+    console.error('[Electron] Failed to start server:', err);
   }
-  if (agentChild) {
-    try { agentChild.kill(); } catch {}
-    agentChild = null;
+
+  try {
+    console.log('[Electron] Starting embedded Agent...');
+    await import(pathToFileURL(agentPath).href);
+  } catch (err) {
+    console.error('[Electron] Failed to start agent:', err);
   }
 }
 
 function waitForServer(callback, attempts = 30) {
   if (attempts <= 0) {
-    callback(new Error('Server failed to start in time'));
+    callback(null, { url: `http://localhost:${SERVER_PORT}` });
     return;
   }
   const req = http.get(`http://127.0.0.1:${SERVER_PORT}/api/info`, (res) => {
@@ -61,20 +47,19 @@ function waitForServer(callback, attempts = 30) {
         }
       });
     } else {
-      setTimeout(() => waitForServer(callback, attempts - 1), 200);
+      setTimeout(() => waitForServer(callback, attempts - 1), 150);
     }
   });
   req.on('error', () => {
-    setTimeout(() => waitForServer(callback, attempts - 1), 200);
+    setTimeout(() => waitForServer(callback, attempts - 1), 150);
   });
 }
 
 function createTray(serverInfo) {
   try {
-    const iconPath = path.join(__dirname, '..', 'web', 'public', 'favicon.svg');
-    tray = new Tray(nativeImage.createFromPath(iconPath));
+    const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+    tray = new Tray(nativeImage.createFromPath(iconPath).resize({ width: 18, height: 18 }));
   } catch {
-    // Fallback if SVG tray icon is unsupported
     tray = new Tray(nativeImage.createEmpty());
   }
 
@@ -129,6 +114,7 @@ function createWindow(serverInfo) {
     minWidth: 800,
     minHeight: 600,
     title: 'ScreenBridge',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
@@ -136,10 +122,9 @@ function createWindow(serverInfo) {
     backgroundColor: '#0f172a'
   });
 
-  // Setup screen capture handler for navigator.mediaDevices.getDisplayMedia
+  // Enable screen / window capture in getDisplayMedia
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
-      // Pick primary screen or first source
       if (sources.length > 0) {
         callback({ video: sources[0] });
       } else {
@@ -158,7 +143,6 @@ function createWindow(serverInfo) {
     }
   });
 
-  // External links open in default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) shell.openExternal(url);
     return { action: 'deny' };
@@ -167,7 +151,6 @@ function createWindow(serverInfo) {
   createTray(serverInfo);
 }
 
-// Single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
@@ -180,8 +163,8 @@ if (!gotTheLock) {
     }
   });
 
-  app.whenReady().then(() => {
-    startServices();
+  app.whenReady().then(async () => {
+    await startServices();
     waitForServer((err, info) => {
       createWindow(info);
     });
@@ -197,7 +180,6 @@ if (!gotTheLock) {
 
   app.on('before-quit', () => {
     isQuitting = true;
-    stopServices();
   });
 
   app.on('window-all-closed', () => {

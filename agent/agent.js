@@ -18,7 +18,10 @@ let macProcess = null;
 let macScreenSize = null;
 
 if (platform === 'darwin') {
-  const binPath = path.join(__dirname, 'bin', 'mac-input');
+  let binPath = path.join(__dirname, 'bin', 'mac-input');
+  if (!fs.existsSync(binPath) && binPath.includes('app.asar')) {
+    binPath = binPath.replace('app.asar', 'app.asar.unpacked');
+  }
   const srcPath = path.join(__dirname, 'src', 'mac_input.c');
 
   // If binary doesn't exist, try compiling it
