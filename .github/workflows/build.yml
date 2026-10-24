@@ -1,0 +1,159 @@
+name: Build ScreenBridge (All Devices)
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-web:
+    name: Build Web App
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build Web Client
+        run: npm run build
+      - name: Upload Web Dist Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenbridge-web-pwa
+          path: web/dist
+
+  build-mac:
+    name: Build macOS Desktop (DMG & App)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build Web Client
+        run: npm run build
+      - name: Compile Native macOS Input Acceleration Helper
+        run: |
+          mkdir -p agent/bin
+          clang -arch arm64 -arch x86_64 -framework ApplicationServices -O2 agent/src/mac_input.c -o agent/bin/mac-input
+          chmod +x agent/bin/mac-input
+      - name: Package macOS App & DMG
+        run: npx electron-builder --mac dmg zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenbridge-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+
+  build-windows:
+    name: Build Windows Desktop (EXE)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build Web Client
+        run: npm run build
+      - name: Package Windows Installer & Portable
+        run: npx electron-builder --win nsis portable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenbridge-windows
+          path: |
+            release/*.exe
+
+  build-linux:
+    name: Build Linux Desktop (AppImage & DEB)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build Web Client
+        run: npm run build
+      - name: Package Linux AppImage & DEB
+        run: npx electron-builder --linux AppImage deb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenbridge-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+
+  build-standalone-bundle:
+    name: Build Standalone Cross-Platform Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: Build Web Client
+        run: npm run build
+      - name: Create Portable Zip Package
+        run: |
+          mkdir -p bundle/screenbridge
+          cp -r server agent web desktop package.json package-lock.json README.md ScreenBridge.command run-mac.sh run-windows.bat bundle/screenbridge/
+          cd bundle
+          zip -r ../screenbridge-portable-all-platforms.zip screenbridge
+      - name: Upload Portable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenbridge-portable-all-platforms
+          path: screenbridge-portable-all-platforms.zip
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-web, build-mac, build-windows, build-linux, build-standalone-bundle]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            all-artifacts/screenbridge-macos/*
+            all-artifacts/screenbridge-windows/*
+            all-artifacts/screenbridge-linux/*
+            all-artifacts/screenbridge-portable-all-platforms/*
+            all-artifacts/screenbridge-web-pwa/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

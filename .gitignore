@@ -1,0 +1,21 @@
+node_modules/
+dist/
+web/dist/
+release/
+build/*
+!build/icon.icns
+!build/icon.png
+bundle/
+*.zip
+*.dmg
+*.exe
+*.AppImage
+*.deb
+
+# Native binary outputs
+agent/bin/mac-input
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log

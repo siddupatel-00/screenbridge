@@ -1,0 +1,74 @@
+{
+  "name": "screenbridge",
+  "version": "1.0.0",
+  "author": "siddupatel-00",
+  "description": "Cross-platform screen share / second screen over LAN (Mac, Windows, Linux, iOS, Android)",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "workspaces": [
+    "server",
+    "web",
+    "agent"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w web",
+    "start": "npm run start -w server",
+    "start:agent": "node agent/agent.js",
+    "start:all": "concurrently -n \"SERVER,AGENT\" -c \"blue,green\" \"npm start\" \"npm run start:agent\"",
+    "electron": "electron .",
+    "app": "npm run build && electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.screenbridge.app",
+    "productName": "ScreenBridge",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "server/**/*",
+      "agent/**/*",
+      "web/dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
+  }
+}
