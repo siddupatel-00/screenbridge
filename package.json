@@ -1,7 +1,10 @@
 {
   "name": "screenbridge",
   "version": "1.0.0",
-  "author": "siddupatel-00",
+  "author": {
+    "name": "siddupatel-00",
+    "email": "siddusurishetti@gmail.com"
+  },
   "description": "Cross-platform screen share / second screen over LAN (Mac, Windows, Linux, iOS, Android)",
   "private": true,
   "main": "desktop/main.cjs",
@@ -25,6 +28,7 @@
     "dist:linux": "electron-builder --linux"
   },
   "build": {
+    "publish": null,
     "appId": "com.screenbridge.app",
     "productName": "ScreenBridge",
     "directories": {
@@ -56,6 +60,7 @@
     },
     "linux": {
       "icon": "build/icon.png",
+      "maintainer": "siddupatel-00 <siddusurishetti@gmail.com>",
       "target": [
         "AppImage",
         "deb"
